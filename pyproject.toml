@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geo-refuel-mission-planner"
+version = "0.1.0"
+description = "Simulation of a mission-planning strategy for single-service-spacecraft refueling of a satellite constellation in GEO circular orbit, servicing targets in a sequential manner."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.7",
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
