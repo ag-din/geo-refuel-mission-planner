@@ -1,55 +1,77 @@
 """
 main.py
 -------
-
+Main entry point for a full mission case: it runs one scenario,
+prints the mass profile, evaluates the TSA validity regime, and
+reuses the HTML animation in the visualization folder to render the
+result in one place.
 """
 
 from __future__ import annotations
+
 import itertools
 import os
-import numpy as np
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+for p in (ROOT, SRC):
+    path = str(p)
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 from orbital_refuel.mission import generate_mission_case
-
-from orbital_refuel.rdvsq_planning_model import (
-    solve_optimal_rdv_seq, best_sequence_candidates,
-    time_distribution_ip,
-)
+from orbital_refuel.rdvsq_planning_model import solve_optimal_rdv_seq, time_distribution_ip
+from visualization.animate_mission_html import build_payload, render_html
 
 
-def demonstrate_mass_profile():
-    """
-    """
-
-
-    orbits, alphas = generate_mission_case(6, seed=3, evenly=True)
-
+def demonstrate_mass_profile(
+    n_targets: int = 6,
+    seed: int = 3,
+    evenly: bool = True,
+    tf_periods: float = 5.5,
+    m0_kg: float = 500.0,
+    isp_s: float = 300.0,
+    tof_min_frac: float = 0.03,
+    tof_max_frac: float = 1.3,
+):
+    """Run one mission case and print the mass profile."""
+    orbits, alphas = generate_mission_case(n_targets, seed=seed, evenly=evenly)
     T_ref = orbits[0].period_s
+    tf = tf_periods * T_ref
 
-    tf = 5.5 * T_ref
+    best, _ = solve_optimal_rdv_seq(
+        orbits,
+        alphas,
+        tf,
+        tof_min=tof_min_frac * T_ref,
+        tof_max=tof_max_frac * T_ref,
+        n_samples=50,
+        m0_kg=m0_kg,
+        isp_s=isp_s,
+        verbose=False,
+    )
 
-    best, _ = solve_optimal_rdv_seq(orbits, alphas, tf, tof_min=0.03 * T_ref,
-                                 tof_max=1.3 * T_ref, n_samples=50,
-                                 m0_kg=500.0, isp_s=300.0, verbose=False)
-
-    print(f"\nSecuencia óptima: {best['sequence_labels']}  "
-          f"(constelación equiespaciada, Isp=300s, m0=500 kg)")
-    print(f"{'Tramo':<8}{'Δv (km/s)':<12}{'masa antes (kg)':<18}"
-          f"{'masa después (kg)':<20}{'propelente (kg)':<16}")
+    print(f"\nOptimal sequence: {best['sequence_labels']}"
+          f"  (evenly spaced constellation, Isp={isp_s}s, m0={m0_kg} kg)")
+    print(f"{'Leg':<8}{'Δv (km/s)':<12}{'mass before (kg)':<18}"
+          f"{'mass after (kg)':<20}{'propellant (kg)':<16}")
     for i, leg in enumerate(best["mass_profile"]):
-        print(f"{i+1:<8}{leg['dv_km_s']:<12.4f}{leg['mass_before_kg']:<18.2f}"
+        print(f"{i + 1:<8}{leg['dv_km_s']:<12.4f}{leg['mass_before_kg']:<18.2f}"
               f"{leg['mass_after_kg']:<20.2f}{leg['propellant_used_kg']:<16.2f}")
 
-    print(f"\nNota: los Δv son iguales entre tramos (geometría simétrica), pero "
-          f"el propelente consumido decrece de {best['mass_profile'][0]['propellant_used_kg']:.1f} "
-          f"a {best['mass_profile'][-1]['propellant_used_kg']:.1f} kg — exactamente el patrón "
-          f"que reportan las Tablas 1 y 4 del paper: el propelente depende de la MASA actual, "
-          f"no solo del Δv.")
-    print(f"final mass: {best['final_mass_kg']:.2f} kg "
-          f"(consumió {best['total_propellant_kg']:.2f} kg de 500 kg iniciales)\n")
-
-
-
+    print(f"\nNote: Δv is the same across legs (symmetric geometry), but "
+          f"propellant decreases from {best['mass_profile'][0]['propellant_used_kg']:.1f} "
+          f"to {best['mass_profile'][-1]['propellant_used_kg']:.1f} kg — exactly the pattern "
+          f"reported in Tables 1 and 4 of the paper: propellant depends on the current MASS, "
+          f"not only on Δv.")
+    print(f"Final service mass: {best['final_mass_kg']:.2f} kg "
+          f"(used {best['total_propellant_kg']:.2f} kg out of {m0_kg} kg initial)\n")
+    return best
 
 
 def _sep(cum, a_idx, b_idx):
@@ -60,8 +82,7 @@ def _sep(cum, a_idx, b_idx):
 
 
 def full_bruteforce_check(alphas, tf, tof_min, tof_max, n_samples=35):
-    """For n=5: test all 120 possible sequences UNDER THE SAME
-    shared time budget and return the true optimum."""
+    """For n=5, test all 120 possible sequences under the same time budget and return the true optimum."""
     n = len(alphas) - 1
     cum = [0.0]
     for g in alphas[:-1]:
@@ -79,21 +100,26 @@ def full_bruteforce_check(alphas, tf, tof_min, tof_max, n_samples=35):
     return best_seq, best_dv
 
 
-def validate_tsa_optimality_regime(out_dir="outputs/figures"):
+def validate_tsa_optimality_regime(
+    n_targets: int = 5,
+    seed: int = 7,
+    out_dir: str | os.PathLike = "outputs/figures",
+):
+    """Check when the TSA heuristic matches the true brute-force optimum."""
     print("=" * 70)
-    print("VALIDACIÓN 2: ¿en qué régimen de tiempo la heurística TSA es")
-    print("               realmente óptima? (verificación por fuerza bruta)")
+    print("VALIDATION 2: in which time regime is the TSA heuristic actually optimal?")
+    print("               (brute-force verification)")
     print("=" * 70)
 
-    orbits, alphas = generate_mission_case(5, seed=7)
+    orbits, alphas = generate_mission_case(n_targets, seed=seed)
     T_ref = orbits[0].period_s
     tof_min, tof_max = 0.03 * T_ref, 1.3 * T_ref
 
     tf_factors = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.4]
     tsa_costs, real_costs, matches = [], [], []
 
-    print(f"\n{'tf (periodos)':<16}{'tf/tramo':<12}{'Δv predicho TSA':<18}"
-          f"{'Δv óptimo real':<18}{'¿coincide?':<10}")
+    print(f"\n{'tf (periods)':<16}{'tf/leg':<12}{'TSA predicted Δv':<18}"
+          f"{'true optimal Δv':<18}{'match?':<10}")
     print("-" * 74)
 
     for f in tf_factors:
@@ -107,21 +133,19 @@ def validate_tsa_optimality_regime(out_dir="outputs/figures"):
         real_costs.append(real_dv)
         matches.append(match)
 
-        print(f"{f:<16.1f}{f/5:<12.2f}{best['total_dv']:<18.3f}"
-              f"{real_dv:<18.3f}{'sí' if match else 'NO':<10}")
+        print(f"{f:<16.1f}{f / 5:<12.2f}{best['total_dv']:<18.3f}"
+              f"{real_dv:<18.3f}{'yes' if match else 'NO':<10}")
 
-    # Plot
     os.makedirs(out_dir, exist_ok=True)
     fig, ax = plt.subplots(figsize=(8.5, 5))
-    ax.plot(tf_factors, tsa_costs, "o-", label="Predicción TSA (paper)", color="royalblue")
-    ax.plot(tf_factors, real_costs, "^--", label="Óptimo real (fuerza bruta, mismo tf)",
-            color="green")
+    ax.plot(tf_factors, tsa_costs, "o-", label="TSA prediction (paper)", color="royalblue")
+    ax.plot(tf_factors, real_costs, "^--", label="True optimum (brute force, same tf)", color="green")
     for f, m in zip(tf_factors, matches):
         if not m:
             ax.axvspan(f - 0.05, f + 0.05, color="tomato", alpha=0.15)
-    ax.set_xlabel("Presupuesto total de tiempo tf (periodos orbitales)")
-    ax.set_ylabel("Δv total (km/s)")
-    ax.set_title("¿Cuándo predice bien la heurística TSA? (zona roja = falla)")
+    ax.set_xlabel("Total time budget tf (orbital periods)")
+    ax.set_ylabel("Total Δv (km/s)")
+    ax.set_title("When does the TSA heuristic predict well? (red zone = failure)")
     ax.legend()
     ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -130,17 +154,73 @@ def validate_tsa_optimality_regime(out_dir="outputs/figures"):
     plt.close(fig)
 
     first_ok = next((f for f, m in zip(tf_factors, matches) if m), None)
-    print(f"\nLa heurística TSA empieza a coincidir con el óptimo real a partir de "
-          f"tf ≈ {first_ok} periodos (~{first_ok/5:.2f} periodos/tramo para n=5).")
-    print(f"Los propios ejemplos del paper usan tf=15.6 con n=4-6 (~2.6-3.9 "
-          f"periodos/tramo) — dentro de la región donde la heurística sí funciona.")
-    print(f"\nFigura guardada en: {path}")
+    print(f"\nTSA starts matching the true optimum at tf ≈ {first_ok} periods "
+          f"(~{first_ok / 5:.2f} periods/leg for n=5).")
+    print(f"The paper examples use tf=15.6 with n=4-6 (~2.6-3.9 periods/leg) — "
+          f"within the region where the heuristic does work.")
+    print(f"\nFigure saved to: {path}")
+    return path
+
+
+def generate_visualization_case(
+    n_targets: int = 6,
+    seed: int = 3,
+    evenly: bool = True,
+    tf_periods: float = 5.5,
+    output_path: str | os.PathLike | None = None,
+):
+    """Reuse the HTML visualizer from the visualization folder for the requested case."""
+    payload = build_payload(
+        n_targets=n_targets,
+        seed=seed,
+        evenly=evenly,
+        tf_periods=tf_periods,
+    )
+    target_path = Path(output_path) if output_path is not None else ROOT / "outputs" / "reports" / "mission_visualization.html"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    html = render_html(payload)
+    target_path.write_text(html)
+    print(f"Visualization generated at: {target_path}")
+    return target_path
+
+
+def run_case(
+    n_targets: int = 6,
+    seed: int = 3,
+    evenly: bool = True,
+    tf_periods: float = 5.5,
+    m0_kg: float = 500.0,
+    isp_s: float = 300.0,
+    generate_html: bool = True,
+):
+    """Run one full case: mass profile + validity regime + HTML visualization."""
+    print("\n=== Mission case ===")
+    best = demonstrate_mass_profile(
+        n_targets=n_targets,
+        seed=seed,
+        evenly=evenly,
+        tf_periods=tf_periods,
+        m0_kg=m0_kg,
+        isp_s=isp_s,
+    )
+
+    print("\n=== Regime analysis ===")
+    validate_tsa_optimality_regime(n_targets=min(5, max(3, n_targets)), seed=7)
+
+    if generate_html:
+        print("\n=== Visualization ===")
+        generate_visualization_case(
+            n_targets=n_targets,
+            seed=seed,
+            evenly=evenly,
+            tf_periods=tf_periods,
+            output_path=ROOT / "outputs" / "reports" / "mission_visualization.html",
+        )
+
+    return best
 
 
 if __name__ == "__main__":
-
-    print("\nCase")
-    demonstrate_mass_profile()
-    validate_tsa_optimality_regime()
+    run_case()
 
     
