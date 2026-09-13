@@ -1,27 +1,15 @@
 """
 mass_dynamics.py
 -----------------
-Integración RIGUROSA de masa y la ecuación del cohete de Tsiolkovsky en
-la misión 
 
-  1. Se modelan DOS tanques físicamente distintos:
-       - propelente de MANIOBRA (el que el propio servicio quema para
-         cambiar de órbita — se agota vía Tsiolkovsky en cada impulso)
-       - carga de COMBUSTIBLE A ENTREGAR (lo que se transfiere a cada
-         satélite objetivo al llegar — no se quema, se entrega)
+Implements the mass dynamics of a spacecraft during a mission
+with multiple rendezvous and refueling operations.
 
-  2. La masa que entra en la exponencial de Tsiolkovsky en cada impulso
-     es la masa INSTANTÁNEA TOTAL de la nave (seca + maniobra restante +
-     CARGA QUE TODAVÍA LLEVA A BORDO) — la carga aún no entregada pesa y
-     hay que acelerarla también, aunque no se "gaste" hasta el rendezvous.
-     Ignorar esto (tratar solo la masa seca+maniobra) sería la
-     simplificación que el usuario pidió evitar.
-
-  3. FACTIBILIDAD DURA: si en algún tramo el propelente de maniobra
-     requerido excede lo que queda en el tanque de maniobra, la misión
-     se declara INFACTIBLE en ese punto — no se seguye computando como
-     si nada (a diferencia de la v. anterior, que no tenía ningún tipo
-     de chequeo de suficiencia de combustible).
+It is modeled with two physically distinct tanks:
+    - MANEUVER propellant (the one the service itself burns to change orbit —
+        it is depleted via Tsiolkovsky's equation at each impulse)
+    - CARGO propellant (the one that is transferred to each target satellite
+        upon arrival — it is not burned, it is delivered)
 
 """
 
@@ -54,7 +42,7 @@ class MassBudget:
     maneuver_prop_kg: float
     cargo_prop_kg: float
     isp_s: float
-    g0: float = 9.80665         # m/s^2
+    g0: float = 9.80665  # m/s^2
 
     @property
     def c0_km_s(self) -> float:
@@ -66,44 +54,74 @@ class MassBudget:
 
 @dataclass
 class LegResult:
+    """
+    Represents the result of a single leg of a mission.
+
+    Arguments
+    ---------
+    leg_index : int
+        The index of the leg in the mission sequence.
+    dv_km_s : float
+        The delta-v required for this leg in km/s.
+    mass_total_before_kg : float
+        The total mass of the spacecraft before the maneuver (dry + maneuver + cargo) in kilograms      
+    propellant_required_kg : float
+        The amount of propellant required for this leg according to Tsiolkovsky's equation
+    maneuver_remaining_before_kg : float
+        The amount of maneuver propellant remaining before this leg in kilograms
+    maneuver_remaining_after_kg : float
+        The amount of maneuver propellant remaining after this leg in kilograms
+    feasible : bool
+        Whether the leg is feasible (i.e., enough maneuver propellant is available)
+    cargo_delivered_kg : float
+        The amount of cargo propellant delivered at the end of this leg in kilograms
+    cargo_remaining_after_kg : float
+        The amount of cargo propellant remaining after this leg in kilograms
+
+    """
     leg_index: int
     dv_km_s: float
-    mass_total_before_kg: float     # seca + maniobra + carga, ANTES del impulso
-    propellant_required_kg: float   # lo que pide Tsiolkovsky para este Δv
+    mass_total_before_kg: float 
+    propellant_required_kg: float
     maneuver_remaining_before_kg: float
     maneuver_remaining_after_kg: float
-    feasible: bool                  # ¿alcanzaba el propelente de maniobra?
-    cargo_delivered_kg: float       # entregada DESPUÉS de este impulso (al llegar)
+    feasible: bool
+    cargo_delivered_kg: float
     cargo_remaining_after_kg: float
 
 
 def simulate_mission_mass(dv_per_leg: list[float], cargo_delivered_per_leg: list[float],
                            budget: MassBudget) -> dict:
     """
-    Simula la masa de la nave tramo a tramo, SIN simplificaciones:
+    Simulates the mass of the spacecraft leg by leg.
 
-      - Antes de cada impulso, la masa que "ve" Tsiolkovsky es la masa
-        TOTAL instantánea (seca + maniobra restante + carga restante
-        A BORDO, incluso la que todavía no se entregó).
-      - El propelente que ese impulso exige se descuenta del tanque de
-        MANIOBRA. Si no alcanza, la misión se declara infactible EN ESE
-        TRAMO (no se sigue simulando más allá, tal como pasaría en la
-        realidad: la nave se queda sin combustible ahí mismo).
-      - Justo después del impulso (al llegar al objetivo del tramo), se
-        entrega la carga correspondiente de ese tramo (si la hay),
-        descontándola del tanque de carga — esto aliviana la nave para
-        los tramos siguientes.
+    Parameters
+    ----------
+    dv_per_leg : list of float
+        List of delta-v values (in km/s) for each leg of the mission.
+    cargo_delivered_per_leg : list of float
+        List of cargo propellant amounts (in kg) to be delivered at the end of each
+        leg. Must have the same length as dv_per_leg.
+    budget : MassBudget
+        The mass budget of the spacecraft, including dry mass, maneuver propellant,
+        cargo propellant, and specific impulse.
 
-    len(cargo_delivered_per_leg) debe ser igual a len(dv_per_leg): la
-    entrega de carga del tramo i ocurre al llegar al destino del tramo i.
-
-    Devuelve un dict con: feasible (bool, misión completa sin quedarse
-    sin combustible), fail_at_leg (índice del tramo donde falló, o None),
-    legs (lista de LegResult), final_maneuver_kg, final_cargo_kg,
-    final_total_mass_kg, total_propellant_used_kg.
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'feasible': bool, whether the entire mission is feasible
+        - 'fail_at_leg': int or None, the index of the leg where feasibility failed
+            (None if the mission is feasible)
+        - 'legs': list of LegResult, the results for each leg
+        - 'final_maneuver_kg': float, remaining maneuver propellant after the mission
+        - 'final_cargo_kg': float, remaining cargo propellant after the mission
+        - 'final_total_mass_kg': float, total mass of the spacecraft after the mission
+        - 'total_propellant_used_kg': float, total maneuver propellant used during the
+            mission
     """
     assert len(dv_per_leg) == len(cargo_delivered_per_leg), \
-        "cargo_delivered_per_leg debe tener una entrada por cada tramo de dv_per_leg"
+        "cargo_delivered_per_leg must have an entry for each leg in dv_per_leg"
 
     maneuver = budget.maneuver_prop_kg
     cargo = budget.cargo_prop_kg
@@ -115,7 +133,7 @@ def simulate_mission_mass(dv_per_leg: list[float], cargo_delivered_per_leg: list
     total_propellant_used = 0.0
 
     for i, (dv, cargo_out) in enumerate(zip(dv_per_leg, cargo_delivered_per_leg)):
-        m_total_before = budget.dry_mass_kg + maneuver + cargo  # <- masa TOTAL, incluye carga aún a bordo
+        m_total_before = budget.dry_mass_kg + maneuver + cargo
         propellant_needed = m_total_before * (1.0 - np.exp(-dv / c0))
 
         leg_feasible = propellant_needed <= maneuver + 1e-9
@@ -126,7 +144,7 @@ def simulate_mission_mass(dv_per_leg: list[float], cargo_delivered_per_leg: list
                 mass_total_before_kg=m_total_before,
                 propellant_required_kg=propellant_needed,
                 maneuver_remaining_before_kg=maneuver,
-                maneuver_remaining_after_kg=maneuver,  # no se ejecuta el impulso
+                maneuver_remaining_after_kg=maneuver,
                 feasible=False,
                 cargo_delivered_kg=0.0,
                 cargo_remaining_after_kg=cargo,
@@ -139,7 +157,7 @@ def simulate_mission_mass(dv_per_leg: list[float], cargo_delivered_per_leg: list
         maneuver -= propellant_needed
         total_propellant_used += propellant_needed
 
-        cargo_delivered = min(cargo_out, cargo)  # no se puede entregar más de lo que queda
+        cargo_delivered = min(cargo_out, cargo)
         cargo -= cargo_delivered
 
         legs.append(LegResult(
