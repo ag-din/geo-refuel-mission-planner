@@ -37,21 +37,32 @@ DOCK_TIME_H = 2.0          # fixed docking/transfer dwell time, same at every st
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "outputs" / "reports" / "mission_visualization.html"
 
 
-def build_payload():
+def build_payload(
+    n_targets: int = N_TARGETS,
+    seed: int = SEED,
+    evenly: bool = EVENLY,
+    tf_periods: float = TF_PERIODS,
+    tof_min_frac: float = TOF_MIN_FRAC,
+    tof_max_frac: float = TOF_MAX_FRAC,
+    m0_kg: float = M0_KG,
+    isp_s: float = ISP_S,
+    cargo_per_leg_kg: float = CARGO_PER_LEG_KG,
+    dock_time_h: float = DOCK_TIME_H,
+):
     """
     Generates the mission scenario, solves the optimal sequence+time problem,
     computes the real Lambert arcs and the mass dynamics, and returns a
     dictionary with all the data needed for the HTML animation.
     """
-    orbits, alphas = generate_mission_case(N_TARGETS, seed=SEED, evenly=EVENLY)
+    orbits, alphas = generate_mission_case(n_targets, seed=seed, evenly=evenly)
     T_ref = orbits[0].period_s
-    tf = TF_PERIODS * T_ref
-    dock_time_s = DOCK_TIME_H * 3600.0
+    tf = tf_periods * T_ref
+    dock_time_s = dock_time_h * 3600.0
 
     best, _ = solve_optimal_rdv_seq(
         orbits, alphas, tf,
-        tof_min=TOF_MIN_FRAC * T_ref, tof_max=TOF_MAX_FRAC * T_ref,
-        n_samples=50, m0_kg=M0_KG, isp_s=ISP_S, verbose=False,
+        tof_min=tof_min_frac * T_ref, tof_max=tof_max_frac * T_ref,
+        n_samples=50, m0_kg=m0_kg, isp_s=isp_s, verbose=False,
         dock_time_s=dock_time_s,
     )
 
@@ -61,9 +72,9 @@ def build_payload():
     n = len(tofs)
 
     # --- Rigorous mass dynamics (two tanks), for the live gauge ---
-    cargo_per_leg = [CARGO_PER_LEG_KG] * n
+    cargo_per_leg = [cargo_per_leg_kg] * n
     cargo_total = sum(cargo_per_leg)
-    dry_mass_kg = M0_KG - cargo_total
+    dry_mass_kg = m0_kg - cargo_total
 
     # Maneuver propellant: compute the true minimum required (binary search,
     # same as in mass_dynamics_demo.py) and add a 25% margin — this makes the
@@ -83,11 +94,11 @@ def build_payload():
         return hi
 
     required_kg = _min_maneuver_propellant(dv_per_leg, cargo_per_leg, dry_mass_kg,
-                                            cargo_total, ISP_S)
+                                            cargo_total, isp_s)
     maneuver_prop_kg = required_kg * 1.25
 
     budget = MassBudget(dry_mass_kg=dry_mass_kg, maneuver_prop_kg=maneuver_prop_kg,
-                         cargo_prop_kg=cargo_total, isp_s=ISP_S)
+                         cargo_prop_kg=cargo_total, isp_s=isp_s)
     mass_sim = simulate_mission_mass(dv_per_leg, cargo_per_leg, budget)
     assert mass_sim["feasible"], "the 25% margin was not enough — check it"
 
@@ -128,7 +139,7 @@ def build_payload():
         "total_duration": t,
         "total_dv": best["total_dv"],
         "tf_budget": tf,
-        "m0_kg": M0_KG,
+        "m0_kg": m0_kg,
         "maneuver_prop_initial_kg": budget.maneuver_prop_kg,
         "cargo_prop_initial_kg": budget.cargo_prop_kg,
         "dry_mass_kg": budget.dry_mass_kg,
@@ -539,12 +550,26 @@ def render_html(payload: dict) -> str:
     return html
 
 
-def main():
-    payload = build_payload()
+def main(
+    n_targets: int = N_TARGETS,
+    seed: int = SEED,
+    evenly: bool = EVENLY,
+    tf_periods: float = TF_PERIODS,
+    output_path: str | Path | None = None,
+):
+    payload = build_payload(
+        n_targets=n_targets,
+        seed=seed,
+        evenly=evenly,
+        tf_periods=tf_periods,
+    )
+    target_path = Path(output_path) if output_path is not None else OUTPUT_PATH
+    target_path.parent.mkdir(parents=True, exist_ok=True)
     html = render_html(payload)
-    OUTPUT_PATH.write_text(html)
+    target_path.write_text(html)
     print(f"RDV Sequence: {payload['tour_labels']}  Total Δv: {payload['total_dv']:.4f} km/s")
-    print(f"Visualization saved to: {OUTPUT_PATH}")
+    print(f"Visualization saved to: {target_path}")
+    return target_path
 
 
 if __name__ == "__main__":
