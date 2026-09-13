@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from orbital_refuel.mission import generate_same_orbit_mission
+from orbital_refuel.mission import generate_mission_case
 from orbital_refuel.rdvsq_planning_model import solve_optimal_rdv_seq
 from orbital_refuel.lambert import solve_lambert
 from orbital_refuel.mass_dynamics import MassBudget, simulate_mission_mass
@@ -43,7 +43,7 @@ def build_payload():
     computes the real Lambert arcs and the mass dynamics, and returns a
     dictionary with all the data needed for the HTML animation.
     """
-    orbits, alphas = generate_same_orbit_mission(N_TARGETS, seed=SEED, evenly=EVENLY)
+    orbits, alphas = generate_mission_case(N_TARGETS, seed=SEED, evenly=EVENLY)
     T_ref = orbits[0].period_s
     tf = TF_PERIODS * T_ref
     dock_time_s = DOCK_TIME_H * 3600.0
