@@ -2,18 +2,18 @@
 rdvsq_planning_model.py
 ----------------------
 
-Implementación directa del modelo de:
+Direct implementation of the model of:
 
   Shen, H., Tsiotras, P. (2002). "Optimal Scheduling for Servicing
   Multiple Satellites in a Circular Constellation." AIAA/AAS
   Astrodynamics Specialist Conference.
 
-    El problema se resuelve en dos
-    pasos:
+    The problem is solved in two
+    steps:
 
-  1. PROBLEMA DE SECUENCIA ÓPTIMA
+  1. OPTIMAL SEQUENCE PROBLEM
 
-  2. PROBLEMA DE DISTRIBUCIÓN ÓPTIMA DE TIEMPO
+  2. OPTIMAL TIME DISTRIBUTION PROBLEM
 
 """
 
@@ -78,23 +78,22 @@ def total_sweep_angle(alphas: list[float], sequence: list[int]) -> float:
 
 
 # ---------------------------------------------------------------------
-# Masa y propelente (ecs. 1-2 de la Sección III de Tsiotras & de Nailly,
+# Mass and propellant (eqs. 1-2 of Section III of Tsiotras & de Nailly,
 # 2005 — "Optimal Single Service Vehicle Refueling")
 # ---------------------------------------------------------------------
 def mass_consumption_profile(dv_per_leg: list[float], m0: float,
                               isp_s: float, g0: float = 9.80665):
     """
-    Dada la lista de Δv (km/s) de cada tramo y la masa inicial del
-    servicio m0 (kg), aplica la ecuación del cohete tramo a tramo:
+    Given the list of leg Δv (km/s) and the initial service mass m0 (kg),
+    apply the rocket equation leg by leg:
 
-        m(t_k^+) = m(t_k^-) * exp(-ΔV_k / (Isp * g0))     (ec. 1 del paper)
+        m(t_k^+) = m(t_k^-) * exp(-ΔV_k / (Isp * g0))     (eq. 1 of the paper)
 
-    Devuelve una lista de dicts, uno por tramo, con la masa ANTES y
-    DESPUÉS del impulso y el propelente consumido — reproduciendo el
-    patrón que muestra el paper en sus Tablas 1 y 4: aunque el Δv de
-    varios tramos sea idéntico, el propelente consumido en cada uno
-    DISMINUYE a medida que la nave se aliviana (el propelente gastado
-    es proporcional a la masa que aún carga, no solo al Δv).
+    Returns a list of dicts, one per leg, with the mass BEFORE and AFTER
+    the burn and the propellant consumed — reproducing the pattern shown in
+    the paper's Tables 1 and 4: even if the Δv of several legs is identical,
+    the propellant consumed in each decreases as the spacecraft gets lighter
+    (the propellant used is proportional to the remaining mass, not just the Δv).
     """
     c0 = isp_s * g0 / 1000.0  # km/s (Isp*g0 está en m/s)
     m = m0
@@ -114,30 +113,28 @@ def mass_consumption_profile(dv_per_leg: list[float], m0: float,
 
 
 # ---------------------------------------------------------------------
-# Paso 2: problema de distribución óptima de tiempo 
+# Step 2: optimal time distribution problem
 # ---------------------------------------------------------------------
 def cost_curve(theta: float, tof_min: float, tof_max: float, n_samples: int,
                r_km: float = GEO_RADIUS_KM, mu: float = MU_EARTH, max_M: int = 3):
-    """Muestrea Cθ(t): Δv (km/s) en función del tiempo de vuelo t, para
-    dos cuerpos en la MISMA órbita circular separados por ángulo theta
-    (rad) — pero ahora usando la curva de costo REAL con "coasting",
-    no solo Lambert de cero-revolución:
+    """Samples Cθ(t): Δv (km/s) as a function of flight time t for
+    two bodies in the SAME circular orbit separated by angle theta (rad) —
+    but now using the REAL cost curve with "coasting", not only Lambert
+    zero-revolution transfer:
 
-      1. Para cada tof de la grilla, se prueban TODAS las soluciones de
-         Lambert de 0 a max_M revoluciones (lambert.find_all_lambert_
-         solutions) y se toma la más barata — esto reproduce la curva
-         "sin coasting" (línea punt eada de la Fig. 1 del paper de
-         Tsiotras & de Nailly), que ya NO es una sola rama sino varias
-         familias entrelazadas.
-      2. Se aplica el MÍNIMO ACUMULADO sobre esa curva: el costo en el
-         tiempo t es el mínimo alcanzable usando CUALQUIER tof <= t —
-         porque siempre se puede ejecutar la transferencia más barata
-         encontrada hasta ahí y luego esperar (coasting, sin costo
-         adicional) el tiempo restante. Esto reproduce exactamente la
-         línea sólida del paper: tramos que decrecen, conectados por
-         "mesetas" donde agregar más tiempo no baja más el costo.
+      1. For each tof on the grid, all Lambert solutions from 0 to max_M
+         revolutions (lambert.find_all_lambert_solutions) are tested and the
+         cheapest one is selected — this reproduces the "without coasting"
+         curve (dotted line in Fig. 1 of the Tsiotras & de Nailly paper),
+         which is no longer a single branch but several intertwined families.
+      2. The running MINIMUM is applied to that curve: the cost at time t is
+         the minimum achievable using any tof <= t — because one can always
+         execute the cheapest transfer found so far and then wait (coasting,
+         at no additional cost) for the remaining time. This reproduces the
+         solid line of the paper exactly: decreasing segments connected by
+         plateaus where adding more time does not reduce the cost further.
 
-    Devuelve (tofs, costs) con costs=inf donde ninguna solución converge.
+    Returns (tofs, costs) with costs=inf wherever no solution converges.
     """
     a = CircularOrbit("a", r_km, 0.0, 0.0, 0.0)
     b = CircularOrbit("b", r_km, 0.0, 0.0, theta)
@@ -165,21 +162,21 @@ def find_breakpoints(theta: float, tof_min: float, tof_max: float,
                       r_km: float = GEO_RADIUS_KM, mu: float = MU_EARTH,
                       max_M: int = 3, n_scan: int = 250):
     """
-    Breakpoints β/A EXACTOS (no muestreados en grilla): para cada rama
-    de Lambert (M revoluciones, camino low/high), encuentra su mínimo
-    local real vía optimización 1D acotada (scipy.optimize.minimize_scalar),
-    no vía grilla. Los β son exactamente los mínimos de cada rama que
-    logran un nuevo récord de costo al recorrer el tiempo creciente —
-    esto reproduce la Sección "Optimal Time Distribution" del paper
-    (Fig. 2/3): cada βij es donde "una curva es seguida por un escalón".
+    Exact β/A breakpoints (not sampled on a grid): for each Lambert branch
+    (M revolutions, low/high path), find its true local minimum via bounded
+    1D optimization (scipy.optimize.minimize_scalar), not via a grid. The β
+    values are exactly the minima of each branch that achieve a new cost record
+    when traversing time in increasing order — this reproduces the Section
+    "Optimal Time Distribution" of the paper (Fig. 2/3): each βij is where
+    "one curve is followed by a step".
 
-    Sigue la simplificación que el propio paper adopta en su IP2/"Case 3"
-    (solo usa los tramos constantes, ver el texto tras la ec. 16): cada
-    A_j se toma igual al siguiente β (en vez de calcular el cruce exacto
-    de las rampas de conexión, que el propio paper describe como
-    "pequeño comparado con el ancho de la meseta").
+    It follows the simplification used by the paper itself in its IP2/"Case 3"
+    (it only uses constant segments; see the text after eq. 16): each A_j is
+    taken equal to the next β (instead of computing the exact crossing of the
+    connecting ramps, which the paper describes as "small compared with the
+    plateau width").
 
-    Devuelve una lista de (beta_j, A_j, costo_j), ordenada por tiempo.
+    Returns a list of (beta_j, A_j, cost_j), ordered by time.
     """
     a = CircularOrbit("a", r_km, 0.0, 0.0, 0.0)
     b = CircularOrbit("b", r_km, 0.0, 0.0, theta)
@@ -237,16 +234,16 @@ def time_distribution_ip_exact(thetas: list[float], tf: float,
                                 r_km: float = GEO_RADIUS_KM, mu: float = MU_EARTH,
                                 max_M: int = 3):
     """
-    Reimplementación LITERAL de IP2 (Case 3, ecs. 14-16 del paper): usa
-    los breakpoints β/A exactos de find_breakpoints() como bins (en vez
-    de una grilla), y las DOS restricciones de tiempo del paper — (16b)
-    Σ A_ij·x_ij ≥ tf y (16c) Σ β_ij·x_ij ≤ tf — en vez de una sola
-    desigualdad. Como el costo es constante dentro de cada [β_j, A_j],
-    la elección exacta de t_i dentro del bin no cambia el Δv, así que el
-    sobrante de tiempo (tf − Σβ_i) se reparte sin costo entre los tramos
-    con margen, para que la suma dé exactamente tf cuando es posible.
+    Literal reimplementation of IP2 (Case 3, eqs. 14-16 in the paper): uses the
+    exact β/A breakpoints from find_breakpoints() as bins (instead of a grid),
+    and the paper's TWO time constraints — (16b) Σ A_ij·x_ij ≥ tf and (16c)
+    Σ β_ij·x_ij ≤ tf — instead of a single inequality. Since the cost is
+    constant inside each [β_j, A_j], the exact choice of t_i within the bin does
+    not change the Δv, so the remaining time (tf − Σβ_i) is distributed at no
+    cost across the legs with slack so that the sum equals exactly tf whenever
+    possible.
 
-    Devuelve (tofs, dv_total, dv_per_leg) o (None, inf, None).
+    Returns (tofs, dv_total, dv_per_leg) or (None, inf, None).
     """
     n = len(thetas)
     bins_per_leg = [find_breakpoints(th, tof_min, tof_max, r_km, mu, max_M) for th in thetas]
@@ -304,18 +301,18 @@ def time_distribution_ip(thetas: list[float], tf: float,
                           tof_min: float, tof_max: float, n_samples: int = 60,
                           r_km: float = GEO_RADIUS_KM, mu: float = MU_EARTH):
     """
-    Distribuye tf entre len(thetas) tramos minimizando el Δv total,
-    replicando IP1 del paper mediante una discretización explícita del
-    tiempo en vez de identificar analíticamente los tramos planos
-    (que requeriría Lambert multi-revolución — ver nota del módulo).
+    Distributes tf across len(thetas) legs while minimizing total Δv,
+    reproducing IP1 from the paper via explicit time discretization rather
+    than analytically identifying the flat segments (which would require
+    multi-revolution Lambert — see module note).
 
-    Formulación (programa entero binario, igual estructura que IP1):
-        variables  x_ik ∈ {0,1}   (tramo i usa el bin k de tiempo)
+    Formulation (binary integer program, same structure as IP1):
+        variables  x_ik ∈ {0,1}   (leg i uses time bin k)
         min        Σ_i Σ_k c_ik x_ik
-        s.a.       Σ_k x_ik = 1                    ∀i   (exactamente un bin por tramo)
-                   Σ_i Σ_k t_ik x_ik ≤ tf                (no exceder el tiempo total)
+        s.a.       Σ_k x_ik = 1                    ∀i   (exactly one bin per leg)
+                   Σ_i Σ_k t_ik x_ik ≤ tf                (do not exceed total time)
 
-    Devuelve (tofs_óptimos, delta_v_total) o (None, inf) si es infactible.
+    Returns (optimal_tofs, total_delta_v) or (None, inf) if infeasible.
     """
     n = len(thetas)
     tof_grid, cost_grid = [], []
@@ -375,7 +372,7 @@ def time_distribution_ip(thetas: list[float], tf: float,
 
 
 # ---------------------------------------------------------------------
-# Orquestador: resuelve el modelo completo (secuencia + distribución)
+# Orchestrator: solves the full model (sequence + distribution)
 # ---------------------------------------------------------------------
 def solve_optimal_rdv_seq(orbits, alphas, tf: float, tof_min: float, tof_max: float,
                        n_samples: int = 60, r_km: float = GEO_RADIUS_KM,
@@ -384,43 +381,40 @@ def solve_optimal_rdv_seq(orbits, alphas, tf: float, tof_min: float, tof_max: fl
                        time_method: str = "grid", max_M: int = 3,
                        dock_time_s: float = 0.0):
     """
-    Resuelve el problema completo del paper (Problem 2: sin retorno al
-    depot): identifica la(s) secuencia(s) candidata(s) de mínimo TSA,
-    resuelve la distribución óptima de tiempo para CADA una, y devuelve
-    la mejor.
+    Solves the complete paper problem (Problem 2: without returning to the
+    depot): identifies the candidate sequence(s) with minimum TSA, solves the
+    optimal time distribution for each, and returns the best one.
 
-    time_method="grid" (default, rápido): time_distribution_ip — curva
-    de costo real (multi-rev + coasting) pero discretizada en grilla.
-    time_method="exact" (más lento, más fiel): time_distribution_ip_exact
-    — breakpoints β/A exactos vía optimización 1D por rama, con las DOS
-    restricciones de tiempo del paper (ecs. 16b/16c). Da resultados
-    iguales o mejores que "grid" (nunca peores) porque no tiene error de
-    discretización, a costa de más tiempo de cómputo.
+    time_method="grid" (default, fast): time_distribution_ip — real cost curve
+    (multi-rev + coasting) but discretized on a grid.
+    time_method="exact" (slower, more faithful): time_distribution_ip_exact
+    — exact β/A breakpoints via 1D optimization per branch, with the paper's
+    TWO time constraints (eqs. 16b/16c). This gives equal or better results
+    than "grid" (never worse) because it has no discretization error, at the
+    cost of more computation time.
 
-    dock_time_s: tiempo fijo de acoplamiento/entrega en CADA satélite
-    visitado (igual para todos — no está en el paper, es una extensión
-    propia). Se descuenta del `tf` total ANTES de repartir tiempo entre
-    los tramos de transferencia (tf_transferencias = tf - n_legs *
-    dock_time_s), así que la lógica de secuencia y de programación
-    entera no cambia en absoluto — solo el presupuesto disponible para
-    viajar. El tiempo de acople no consume combustible por sí mismo (es
-    tiempo de operación, no una maniobra), así que no afecta el perfil
-    de masa vía Tsiolkovsky. Se reporta por separado en el resultado
-    (`dock_time_s`, `total_duration_with_docking`) para que quien arme
-    un cronograma o animación pueda insertar la pausa real entre la
-    llegada a un objetivo y la salida hacia el siguiente.
+    dock_time_s: fixed docking/handling time at EACH visited satellite (same for
+    all — not in the paper, it is a custom extension). It is subtracted from the
+    total `tf` BEFORE distributing time across transfer legs
+    (tf_transferencias = tf - n_legs * dock_time_s), so the sequence logic and
+    integer program do not change at all — only the time budget available for
+    travel. Dock time does not consume propellant by itself (it is operational
+    time, not a maneuver), so it does not affect the mass profile via
+    Tsiolkovsky. It is reported separately in the result (`dock_time_s`,
+    `total_duration_with_docking`) so that anyone building a schedule or
+    animation can insert the real pause between arrival at a target and the
+    departure toward the next one.
 
-    Si se da m0_kg (masa inicial del servicio, kg), además calcula el
-    perfil de consumo de propelente tramo a tramo vía Tsiolkovsky (ecs.
-    1-2 de la Sección III de Tsiotras & de Nailly, 2005), replicando el
-    patrón de sus Tablas 1/4: Δv iguales entre tramos NO implican
-    propelente igual, porque la nave se aliviana en cada quemado.
+    If m0_kg is given (initial service mass, kg), it also computes the leg-by-leg
+    propellant consumption profile via Tsiolkovsky (eqs. 1-2 of Section III of
+    Tsiotras & de Nailly, 2005), reproducing the pattern in Tables 1/4: equal
+    Δv across legs does NOT imply equal propellant, because the vehicle becomes
+    lighter after each burn.
 
-    Devuelve un dict con: sequence (índices en `orbits`), thetas, tofs,
-    total_dv, tsa, dv_per_leg, mass_profile (si m0_kg se dio), y el
-    detalle de todas las candidatas evaluadas (para mostrar, como hace
-    el paper, que puede haber empate en TSA que solo se resuelve
-    calculando el costo real).
+    Returns a dict with: sequence (indices in `orbits`), thetas, tofs,
+    total_dv, tsa, dv_per_leg, mass_profile (if m0_kg was given), and the
+    details of all evaluated candidates (to show, as the paper does, that there
+    may be a TSA tie that is only resolved by computing the real cost).
     """
     candidates = best_sequence_candidates(alphas)
     n_legs = len(alphas) - 1
