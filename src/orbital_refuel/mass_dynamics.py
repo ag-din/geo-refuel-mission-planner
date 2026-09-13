@@ -32,16 +32,35 @@ import numpy as np
 
 @dataclass
 class MassBudget:
-    """Estado de masa del satélite de servicio."""
-    dry_mass_kg: float          # masa estructural (nunca cambia)
-    maneuver_prop_kg: float     # propelente propio disponible al inicio
-    cargo_prop_kg: float        # combustible total a entregar, disponible al inicio
-    isp_s: float                # impulso específico del motor propio
+    """
+    Represents the mass budget of a spacecraft for a mission,
+    including dry mass, maneuver propellant, cargo propellant,
+    and specific impulse.
+
+    Arguments
+    ---------
+    dry_mass_kg : float
+        The dry mass of the spacecraft in kilograms (structural mass).
+    maneuver_prop_kg : float
+        The amount of propellant available for maneuvers in kilograms.
+    cargo_prop_kg : float
+        The total amount of propellant to be delivered as cargo in kilograms.
+    isp_s : float
+        The specific impulse of the spacecraft's engine in seconds.
+    g0 : float, optional
+        The standard gravity in m/s^2 (default is 9.80665 m/s^2).
+    """
+    dry_mass_kg: float
+    maneuver_prop_kg: float
+    cargo_prop_kg: float
+    isp_s: float
     g0: float = 9.80665         # m/s^2
 
     @property
     def c0_km_s(self) -> float:
-        """Velocidad de escape efectiva, en km/s (Isp·g0 está en m/s)."""
+        """
+        Effective exhaust velocity in km/s (Isp·g0 is in m/s).
+        """
         return self.isp_s * self.g0 / 1000.0
 
 
