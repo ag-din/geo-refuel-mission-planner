@@ -31,6 +31,20 @@ GEO_RADIUS_KM = R_EARTH + 35786.0
 
 def best_sequence_candidates(alphas: list[float]) -> list[list[int]]:
     """
+    Identifies the candidate sequences with minimum total sweep angle (TSA).
+
+    Parameters
+    ----------
+    alphas : list of float
+        List of angular gaps (in radians) between consecutive satellites,
+        including the gap between the last target and the depot.
+    
+    Returns
+    -------
+    list of list of int
+        List of candidate sequences (as lists of indices) that achieve the
+        minimum TSA. Each sequence is a permutation of the indices 1..n
+        (the depot is always index 0 and is not included in the sequence).
 
     """
     a = np.array(alphas, dtype=float)
@@ -57,7 +71,22 @@ def best_sequence_candidates(alphas: list[float]) -> list[list[int]]:
 
 
 def total_sweep_angle(alphas: list[float], sequence: list[int]) -> float:
+    """
+    Computes the total sweep angle (TSA) for a given sequence of satellites.
 
+    Parameters
+    ----------
+    alphas : list of float
+        List of angular gaps (in radians) between consecutive satellites,
+        including the gap between the last target and the depot.
+    sequence : list of int
+        List of satellite indices in the order they are visited.
+
+    Returns
+    -------
+    float
+        The total sweep angle (TSA) for the given sequence.
+    """
     n = len(alphas) - 1
     
     cum = [0.0]
@@ -66,6 +95,22 @@ def total_sweep_angle(alphas: list[float], sequence: list[int]) -> float:
     
 
     def sep(u_a, u_b):
+        """
+        Computes the angular separation between two angles u_a and u_b,
+        taking into account the circular nature of the orbit.
+
+        Parameters
+        ----------
+        u_a : float
+            Angle of the first satellite (in radians).
+        u_b : float
+            Angle of the second satellite (in radians).
+        
+        Returns
+        -------
+        float
+            The angular separation between u_a and u_b (in radians).
+        """
         d = (u_b - u_a) % (2 * np.pi)
         if d > np.pi:
             d -= 2 * np.pi
@@ -89,13 +134,27 @@ def mass_consumption_profile(dv_per_leg: list[float], m0: float,
 
         m(t_k^+) = m(t_k^-) * exp(-ΔV_k / (Isp * g0))     (eq. 1 of the paper)
 
-    Returns a list of dicts, one per leg, with the mass BEFORE and AFTER
-    the burn and the propellant consumed — reproducing the pattern shown in
-    the paper's Tables 1 and 4: even if the Δv of several legs is identical,
-    the propellant consumed in each decreases as the spacecraft gets lighter
-    (the propellant used is proportional to the remaining mass, not just the Δv).
+    Parameters
+    ----------
+    dv_per_leg : list of float
+        List of Δv (km/s) for each leg of the mission.
+    m0 : float
+        Initial mass of the service satellite (kg).
+    isp_s : float
+        Specific impulse of the propulsion system (seconds).
+    g0 : float
+        Standard gravity (m/s^2). Default is 9.80665 m/s^2.
+    
+    Returns
+    -------
+    list of dict
+        List of dictionaries containing the mass profile for each leg:
+        - 'dv_km_s': Δv for the leg (km/s)
+        - 'mass_before_kg': mass before the leg (kg)
+        - 'mass_after_kg': mass after the leg (kg)
+        - 'propellant_used_kg': propellant used for the leg (kg)
     """
-    c0 = isp_s * g0 / 1000.0  # km/s (Isp*g0 está en m/s)
+    c0 = isp_s * g0 / 1000.0  # km/s
     m = m0
     profile = []
     for dv in dv_per_leg:
@@ -134,7 +193,29 @@ def cost_curve(theta: float, tof_min: float, tof_max: float, n_samples: int,
          solid line of the paper exactly: decreasing segments connected by
          plateaus where adding more time does not reduce the cost further.
 
-    Returns (tofs, costs) with costs=inf wherever no solution converges.
+    Parameters
+    ----------
+    theta : float
+        Angular separation between the two satellites (radians).
+    tof_min : float
+        Minimum time of flight (seconds).
+    tof_max : float
+        Maximum time of flight (seconds).
+    n_samples : int
+        Number of time samples between tof_min and tof_max.
+    r_km : float
+        Radius of the circular orbit (km). Default is GEO radius.
+    mu : float
+        Gravitational parameter (km^3/s^2). Default is Earth's mu.
+    max_M : int
+        Maximum number of revolutions to consider in Lambert solutions.
+
+    Returns
+    -------
+    tofs : np.ndarray
+        Time of flight values (seconds).
+    costs : np.ndarray
+        Minimum achievable costs (km/s) for each time of flight.
     """
     a = CircularOrbit("a", r_km, 0.0, 0.0, 0.0)
     b = CircularOrbit("b", r_km, 0.0, 0.0, theta)
@@ -201,8 +282,7 @@ def find_breakpoints(theta: float, tof_min: float, tof_max: float,
             if not finite.any():
                 continue
             idx = np.where(finite)[0]
-            # margen pequeño hacia adentro del rango valido, para que el
-            # optimizador acotado no tantee justo en el borde singular
+
             lo = scan[idx[0]] + 1e-3 * (tof_max - tof_min)
             hi = scan[idx[-1]] - 1e-3 * (tof_max - tof_min)
             if hi <= lo:
