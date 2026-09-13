@@ -1,12 +1,12 @@
 """
 animate_mission_html.py
 ------------------------
-Genera una página HTML autocontenida con una ANIMACIÓN INTERACTIVA de la
-misión resuelta por `rdvsq_planning_model.solve_optimal_rdv_seq`: los
-satélites objetivo moviéndose según Kepler y el satélite de servicio
-recorriendo los arcos de transferencia de Lambert reales, con controles
-de reproducción (play/pause, velocidad, línea de tiempo) y un medidor de
-propelente en vivo (Tsiolkovsky, vía `mass_dynamics`).
+Generates a self-contained HTML page with an INTERACTIVE ANIMATION of the
+mission solved by `rdvsq_planning_model.solve_optimal_rdv_seq`: the target
+satellites move according to Keplerian motion and the service satellite
+traces the real Lambert transfer arcs, with playback controls (play/pause,
+speed, timeline) and a live propellant gauge (Tsiolkovsky, via
+`mass_dynamics`).
 
 """
 
@@ -27,17 +27,22 @@ from orbital_refuel.keplerian import MU_EARTH
 N_TARGETS = 6
 SEED = 3
 EVENLY = True
-TF_PERIODS = 5.5          # presupuesto de tiempo total, en periodos orbitales
+TF_PERIODS = 5.5          # total time budget, in orbital periods
 TOF_MIN_FRAC = 0.03
 TOF_MAX_FRAC = 1.3
 M0_KG = 500.0
 ISP_S = 300.0
-CARGO_PER_LEG_KG = 40.0    # combustible entregado a cada objetivo al llegar
-DOCK_TIME_H = 2.0          # tiempo fijo de acoplamiento/entrega, igual en cada parada
+CARGO_PER_LEG_KG = 40.0    # propellant delivered to each target upon arrival
+DOCK_TIME_H = 2.0          # fixed docking/transfer dwell time, same at every stop
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "outputs" / "reports" / "mission_visualization.html"
 
 
 def build_payload():
+    """
+    Generates the mission scenario, solves the optimal sequence+time problem,
+    computes the real Lambert arcs and the mass dynamics, and returns a
+    dictionary with all the data needed for the HTML animation.
+    """
     orbits, alphas = generate_same_orbit_mission(N_TARGETS, seed=SEED, evenly=EVENLY)
     T_ref = orbits[0].period_s
     tf = TF_PERIODS * T_ref
@@ -50,22 +55,22 @@ def build_payload():
         dock_time_s=dock_time_s,
     )
 
-    seq_idx = best["sequence_idx"]  # [0, ...] indices en `orbits`
+    seq_idx = best["sequence_idx"]  # [0, ...] indices in `orbits`
     tofs = best["tofs"]
     dv_per_leg = best["dv_per_leg"]
     n = len(tofs)
 
-    # --- Dinámica de masa rigurosa (dos tanques), para el medidor en vivo ---
+    # --- Rigorous mass dynamics (two tanks), for the live gauge ---
     cargo_per_leg = [CARGO_PER_LEG_KG] * n
     cargo_total = sum(cargo_per_leg)
     dry_mass_kg = M0_KG - cargo_total
 
-    # Propelente de maniobra: se calcula el mínimo REAL necesario (búsqueda
-    # binaria, igual que en mass_dynamics_demo.py) y se le da un margen del
-    # 25% — así el medidor de la animación baja de forma significativa en
-    # vez de quedar siempre casi lleno (que es lo que pasaría con un tanque
-    # "casi infinito", además de ser autocontradictorio: ese propelente de
-    # más también pesa y encarece cada quemado).
+    # Maneuver propellant: compute the true minimum required (binary search,
+    # same as in mass_dynamics_demo.py) and add a 25% margin — this makes the
+    # animation gauge drop noticeably instead of staying almost full (which
+    # would happen with an effectively "infinite" tank, and is self-
+    # contradictory anyway: that extra propellant also weighs and increases
+    # the cost of each burn).
     def _min_maneuver_propellant(dv_per_leg, cargo_per_leg, dry_mass_kg, cargo_total, isp_s):
         lo, hi = 0.0, 1e7
         for _ in range(60):
@@ -84,9 +89,9 @@ def build_payload():
     budget = MassBudget(dry_mass_kg=dry_mass_kg, maneuver_prop_kg=maneuver_prop_kg,
                          cargo_prop_kg=cargo_total, isp_s=ISP_S)
     mass_sim = simulate_mission_mass(dv_per_leg, cargo_per_leg, budget)
-    assert mass_sim["feasible"], "el margen del 25% no alcanzó — revisar"
+    assert mass_sim["feasible"], "the 25% margin was not enough — check it"
 
-    # --- Arcos de Lambert reales para cada tramo, con pausa de acople real ---
+    # --- Real Lambert arcs for each leg, with real docking pause ---
     legs_data = []
     t = 0.0
     for i in range(n):
@@ -106,7 +111,7 @@ def build_payload():
             "cargo_remaining_after_kg": leg_mass.cargo_remaining_after_kg,
             "dock_time": dock_time_s,
         })
-        t += tofs[i] + dock_time_s  # <- la nave se queda acoplada antes de salir de nuevo
+        t += tofs[i] + dock_time_s  # <- the spacecraft stays docked before departing again
 
     orbits_data = [{
         "name": o.name, "r": o.radius_km, "inc": o.inclination_rad,
@@ -131,10 +136,10 @@ def build_payload():
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Simulación — misión TSA + IP (Shen &amp; Tsiotras)</title>
+<title>Simulation — TSA + IP mission (Shen &amp; Tsiotras)</title>
 <style>
   :root {
     --bg: #0b1220; --panel: #131c2f; --text: #e8edf7; --muted: #93a1bf;
@@ -193,41 +198,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 
 <header>
-  <h1>&#128752; Misión TSA + IP — Shen &amp; Tsiotras (2002)</h1>
-  <div class="sub">secuencia = __TOUR_LABELS__ &middot; TSA = __TSA_DEG__&deg; &middot; &Delta;v total = __TOTAL_DV__ km/s &middot; duración = __TOTAL_DURATION_H__ h de tf=__TF_BUDGET_H__ h</div>
+  <h1>&#128752; TSA + IP Mission — Shen &amp; Tsiotras (2002)</h1>
+  <div class="sub">sequence = __TOUR_LABELS__ &middot; TSA = __TSA_DEG__&deg; &middot; &Delta;v total = __TOTAL_DV__ km/s &middot; duration = __TOTAL_DURATION_H__ h of tf=__TF_BUDGET_H__ h</div>
 </header>
 
 <div id="main">
   <div id="canvas-wrap"><canvas id="cv"></canvas></div>
   <div id="side">
-    <h2>Combustible (Tsiolkovsky)</h2>
-    <div class="gauge-label"><span>Propelente de maniobra</span><span id="maneuver-pct">100%</span></div>
+    <h2>Fuel (Tsiolkovsky)</h2>
+    <div class="gauge-label"><span>Maneuver propellant</span><span id="maneuver-pct">100%</span></div>
     <div class="gauge-track"><div class="gauge-fill maneuver" id="maneuver-gauge" style="width:100%"></div></div>
-    <div class="gauge-label"><span>Carga a entregar</span><span id="cargo-pct">100%</span></div>
+    <div class="gauge-label"><span>Payload to deliver</span><span id="cargo-pct">100%</span></div>
     <div class="gauge-track"><div class="gauge-fill cargo" id="cargo-gauge" style="width:100%"></div></div>
 
-    <h2>Secuencia de la misión</h2>
+    <h2>Mission sequence</h2>
     <div id="legs-list"></div>
 
-    <h2>Leyenda</h2>
+    <h2>Legend</h2>
     <div><span class="dot-legend" style="background:#ff5a5a"></span>Depot</div>
-    <div><span class="dot-legend" style="background:#4da3ff"></span>Pendiente</div>
-    <div><span class="dot-legend" style="background:#ffd23c"></span>Visitando</div>
-    <div><span class="dot-legend" style="background:#4caf50"></span>Ya visitado</div>
-    <div><span class="dot-legend" style="background:#ff9a3c"></span>Servicio (en tránsito)</div>
+    <div><span class="dot-legend" style="background:#4da3ff"></span>Pending</div>
+    <div><span class="dot-legend" style="background:#ffd23c"></span>Visiting</div>
+    <div><span class="dot-legend" style="background:#4caf50"></span>Visited</div>
+    <div><span class="dot-legend" style="background:#ff9a3c"></span>Service (in transit)</div>
   </div>
 </div>
 
 <div id="controls">
   <div id="scrub-row">
-    <span style="width:70px; color:var(--muted); font-size:12px;">Tiempo</span>
+    <span style="width:70px; color:var(--muted); font-size:12px;">Time</span>
     <input type="range" id="scrub" min="0" max="1000" value="0">
     <span id="time-label" style="width:150px; color:var(--muted); font-size:12px;">0.0 h / 0.0 h</span>
   </div>
   <div id="transport">
-    <button id="play">&#9654; Reproducir</button>
-    <button class="secondary" id="reset">&#8634; Reiniciar</button>
-    <label style="color:var(--muted); font-size:12.5px;">Velocidad
+    <button id="play">&#9654; Play</button>
+    <button class="secondary" id="reset">&#8634; Reset</button>
+    <label style="color:var(--muted); font-size:12.5px;">Speed
       <select id="speed">
         <option value="500">500x</option>
         <option value="1500">1500x</option>
@@ -237,8 +242,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </select>
     </label>
     <div id="readout">
-      <span>Tramo actual: <b id="leg-now">—</b></span>
-      <span>&Delta;v acumulado: <b id="dv-now">0.000</b> km/s</span>
+      <span>Current leg: <b id="leg-now">—</b></span>
+      <span>Cumulative &Delta;v: <b id="dv-now">0.000</b> km/s</span>
     </div>
   </div>
 </div>
@@ -308,7 +313,7 @@ function servicerState(t){
       return { pos: r, legIndex: k, docked: false };
     }
     if (t > arrival && t < nextDepart){
-      // acoplado: se mueve CON el objetivo (misma orbita) mientras dura el acople
+      // docked: moves WITH the target (same orbit) while docking lasts
       return { pos: circularState(DATA.orbits[L.to_idx], t), legIndex: k, docked: true };
     }
   }
@@ -325,8 +330,8 @@ function fuelState(t){
       maneuver = L.maneuver_prop_after_kg;
       cargo = L.cargo_remaining_after_kg;
     } else if (t > L.t_depart){
-      // en transito: interpola el consumo de maniobra de este tramo linealmente
-      // con el tiempo (aproximacion visual; el consumo real es un impulso puntual)
+      // in transit: linearly interpolate the maneuver burn for this leg over time
+      // (visual approximation; the real consumption is an impulsive burn)
       const frac = (t - L.t_depart) / L.tof;
       const before = maneuver;
       maneuver = before - (before - L.maneuver_prop_after_kg) * frac;
@@ -336,8 +341,8 @@ function fuelState(t){
   return { maneuver, cargo };
 }
 
-// ---------- Proyección (problema plano: i=0, RAAN=0 para todos) ----------
-const ELEV = 18 * Math.PI/180, AZ = 10 * Math.PI/180; // leve tilt solo estetico
+// ---------- Projection (planar problem: i=0, RAAN=0 for all) ----------
+const ELEV = 18 * Math.PI/180, AZ = 10 * Math.PI/180; // slight aesthetic tilt only
 function project(p){
   const x1 = p[0]*Math.cos(AZ) - p[1]*Math.sin(AZ);
   const y1 = p[0]*Math.sin(AZ) + p[1]*Math.cos(AZ);
@@ -445,9 +450,9 @@ let t=0, playing=false, lastFrame=null;
 DATA.legs.forEach((L,k)=>{
   const div=document.createElement('div');
   div.className='leg-row'; div.id='leg-'+k;
-  const dockTxt = L.dock_time>0 ? ` &middot; acople=${(L.dock_time/3600).toFixed(1)} h` : '';
+  const dockTxt = L.dock_time>0 ? ` &middot; docking=${(L.dock_time/3600).toFixed(1)} h` : '';
   div.innerHTML = `<div class="names">${k+1}. ${L.from_name} &rarr; ${L.to_name}</div>
-                    <div class="stats">&Delta;v=${L.dv.toFixed(3)} km/s &middot; tof=${(L.tof/3600).toFixed(1)} h &middot; carga=${L.cargo_delivered_kg.toFixed(0)} kg${dockTxt}</div>`;
+                    <div class="stats">&Delta;v=${L.dv.toFixed(3)} km/s &middot; tof=${(L.tof/3600).toFixed(1)} h &middot; payload=${L.cargo_delivered_kg.toFixed(0)} kg${dockTxt}</div>`;
   legsList.appendChild(div);
 });
 
@@ -462,9 +467,9 @@ function updateSide(t){
   });
   legNow.textContent = (sv.legIndex>=0 && sv.legIndex<DATA.legs.length)
       ? (sv.docked
-          ? `acoplado en ${DATA.legs[sv.legIndex].to_name}`
+          ? `docked at ${DATA.legs[sv.legIndex].to_name}`
           : `${DATA.legs[sv.legIndex].from_name} \u2192 ${DATA.legs[sv.legIndex].to_name}`)
-      : (sv.legIndex<0 ? 'esperando salida' : 'misión completa');
+      : (sv.legIndex<0 ? 'waiting for departure' : 'mission complete');
   dvNow.textContent = dvAcc.toFixed(3);
   timeLabel.textContent = `${(t/3600).toFixed(1)} h / ${(DATA.total_duration/3600).toFixed(1)} h`;
 
@@ -484,15 +489,15 @@ function setT(newT){
 }
 
 scrub.addEventListener('input', ()=>{
-  playing=false; playBtn.textContent='\u25B6 Reproducir'; trail=[];
+  playing=false; playBtn.textContent='\u25B6 Play'; trail=[];
   setT(scrub.value/SCRUB_MAX*DATA.total_duration);
 });
 playBtn.addEventListener('click', ()=>{
-  playing=!playing; playBtn.textContent = playing?'\u23F8 Pausar':'\u25B6 Reproducir';
+  playing=!playing; playBtn.textContent = playing?'\u23F8 Pause':'\u25B6 Play';
   lastFrame=null; if (playing) requestAnimationFrame(tick);
 });
 resetBtn.addEventListener('click', ()=>{
-  playing=false; playBtn.textContent='\u25B6 Reproducir'; trail=[]; setT(0);
+  playing=false; playBtn.textContent='\u25B6 Play'; trail=[]; setT(0);
 });
 function tick(now){
   if (!playing) return;
@@ -500,7 +505,7 @@ function tick(now){
   const dtReal=(now-lastFrame)/1000; lastFrame=now;
   const rate=parseFloat(speedSel.value);
   setT(t+dtReal*rate);
-  if (t>=DATA.total_duration){ playing=false; playBtn.textContent='\u25B6 Reproducir'; }
+  if (t>=DATA.total_duration){ playing=false; playBtn.textContent='\u25B6 Play'; }
   requestAnimationFrame(tick);
 }
 
@@ -512,6 +517,19 @@ resize(); setT(0);
 
 
 def render_html(payload: dict) -> str:
+    """
+    Renders the HTML template with the given payload data.
+
+    Parameters
+    ----------
+    payload : dict
+        A dictionary containing the mission data to be embedded in the HTML.
+
+    Returns
+    -------
+    str
+        The rendered HTML string with the payload data inserted.
+    """
     html = HTML_TEMPLATE.replace("__PAYLOAD_JSON__", json.dumps(payload))
     html = html.replace("__TOTAL_DV__", f"{payload['total_dv']:.4f}")
     html = html.replace("__TOTAL_DURATION_H__", f"{payload['total_duration']/3600:.1f}")
@@ -525,8 +543,8 @@ def main():
     payload = build_payload()
     html = render_html(payload)
     OUTPUT_PATH.write_text(html)
-    print(f"Secuencia: {payload['tour_labels']}  Δv total: {payload['total_dv']:.4f} km/s")
-    print(f"Visualización guardada en: {OUTPUT_PATH}")
+    print(f"RDV Sequence: {payload['tour_labels']}  Total Δv: {payload['total_dv']:.4f} km/s")
+    print(f"Visualization saved to: {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
