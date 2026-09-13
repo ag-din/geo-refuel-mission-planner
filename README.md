@@ -1,4 +1,4 @@
-# Orbital Refuel Scheduler PRELIMINAR
+# On-Orbit Refueling Mission Planning
 
 Proyecto de planificación de una nave de servicio que visita varios
 satélites objetivo en órbitas circulares. El objetivo es minimizar el
@@ -150,4 +150,6 @@ no hace falta una segunda cámara ni una vista 3D.
 - `outputs/`: figuras, videos y reportes generados.
 
 ## Limitaciones y trabajo futuro
+
+## Details 
 
