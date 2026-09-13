@@ -1,4 +1,4 @@
-# On-Orbit Refueling Mission Planning
+# On-Orbit Refuelling Mission Planning for Multiple GEO Satellites Using a Single Servicing Spacecraft
 
 Proyecto de planificación de una nave de servicio que visita varios
 satélites objetivo en órbitas circulares. El objetivo es minimizar el
