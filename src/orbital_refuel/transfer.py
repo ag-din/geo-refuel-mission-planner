@@ -1,17 +1,14 @@
 """
 transfer.py
 -----------
-Costo Δv de transferir el satélite de servicio de la órbita `orbit_a`
-a la órbita `orbit_b`, saliendo en el tiempo `t_depart` y empleando un
-tiempo de vuelo `tof`. 
+Cost of Δv to transfer the service satellite from orbit `orbit_a`
+to orbit `orbit_b`, departing at time `t_depart` and using flight time `tof`.
 
-  1. El satélite objetivo SE MUEVE durante el tránsito: su posición de
-     encuentro es su posición en t_depart + tof, no su posición actual.
-  2. El costo depende explícitamente de `tof` (como en la Fig. 1 del
-     paper de Tsiotras & de Nailly) — hay que optimizar sobre tof.
-  3. El cambio de plano orbital (inclinación + RAAN) se captura solo
-     por trabajar en 3D con vectores reales vía Lambert, sin fórmula
-     ad-hoc.
+  1. The target satellite moves during the transfer: its rendezvous
+     position is its position at t_depart + tof, not its current position.
+  2. The cost depends explicitly on `tof` and it must be optimized over tof.
+  3. The orbital plane change (inclination + RAAN) is captured only by
+     working in 3D with real vectors via Lambert, without an ad hoc formula.
 """
 
 from __future__ import annotations
@@ -24,10 +21,30 @@ from .lambert import solve_lambert
 
 def transfer_delta_v(orbit_a: CircularOrbit, orbit_b: CircularOrbit,
                       t_depart: float, tof: float, mu: float = MU_EARTH) -> float:
-    """Δv total (km/s) para ir de orbit_a a orbit_b, saliendo en t_depart
-    con tiempo de vuelo tof. Devuelve inf si Lambert no converge (geometría
-    degenerada) en vez de lanzar excepción, para que la optimización externa
-    pueda simplemente descartar ese punto."""
+    """
+    Total Δv (km/s) to go from orbit_a to orbit_b, leaving at t_depart
+    with flight time tof. Returns inf if Lambert does not converge
+    (degenerate geometry) instead of raising an exception, so the outer
+    optimizer can simply discard that point.
+
+    Parameters
+    ----------
+    orbit_a : CircularOrbit
+        The departure orbit (service satellite).
+    orbit_b : CircularOrbit
+        The target orbit (target satellite).
+    t_depart : float
+        Time of departure (seconds).
+    tof : float
+        Time of flight (seconds).
+    mu : float
+        Gravitational parameter (km^3/s^2). Default is Earth's mu.
+
+    Returns
+    -------
+    float
+        Total Δv (km/s) for the transfer, or np.inf if Lambert fails.
+    """
     r1, v1_local = orbit_a.state_at(t_depart)
     r2, v2_local = orbit_b.state_at(t_depart + tof)
 
@@ -45,12 +62,33 @@ def optimal_transfer(orbit_a: CircularOrbit, orbit_b: CircularOrbit,
                       t_depart: float, tof_min: float, tof_max: float,
                       mu: float = MU_EARTH, n_scan: int = 25):
     """
-    Encuentra el tiempo de vuelo tof* en [tof_min, tof_max] que minimiza
-    el Δv total, mediante un escaneo grueso (para localizar la región del
-    mínimo, ya que la curva Δv-vs-tof puede tener más de un mínimo local,
-    ) seguido de un refinamiento local.
+    Finds the flight time tof* in [tof_min, tof_max] that minimizes total
+    Δv using a coarse scan (to locate the minimum region, since the
+    Δv-vs-tof curve can have multiple local minima) followed by local
+    refinement.
 
-    Devuelve (tof_óptimo, delta_v_óptimo).
+    Parameters
+    ----------
+    orbit_a : CircularOrbit
+        The departure orbit (service satellite).
+    orbit_b : CircularOrbit
+        The target orbit (target satellite).
+    t_depart : float
+        Time of departure (seconds).
+    tof_min : float
+        Minimum time of flight (seconds).
+    tof_max : float
+        Maximum time of flight (seconds).
+    mu : float
+        Gravitational parameter (km^3/s^2). Default is Earth's mu.
+    n_scan : int
+        Number of points in the coarse scan of tof. Default is 25.
+
+    Returns
+    -------
+    tuple
+        (tof*, Δv*) where tof* is the optimal time of flight (seconds)
+        and Δv* is the corresponding total Δv (km/s).
     """
     tof_grid = np.linspace(tof_min, tof_max, n_scan)
     dv_grid = np.array([transfer_delta_v(orbit_a, orbit_b, t_depart, t, mu)
