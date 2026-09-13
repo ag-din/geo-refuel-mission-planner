@@ -9,7 +9,7 @@ import itertools
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from orbital_refuel.mission import generate_same_orbit_mission
+from orbital_refuel.mission import generate_mission_case
 
 from orbital_refuel.rdvsq_planning_model import (
     solve_optimal_rdv_seq, best_sequence_candidates,
@@ -22,7 +22,7 @@ def demonstrate_mass_profile():
     """
 
 
-    orbits, alphas = generate_same_orbit_mission(6, seed=3, evenly=True)
+    orbits, alphas = generate_mission_case(6, seed=3, evenly=True)
 
     T_ref = orbits[0].period_s
 
@@ -85,7 +85,7 @@ def validate_tsa_optimality_regime(out_dir="outputs/figures"):
     print("               realmente óptima? (verificación por fuerza bruta)")
     print("=" * 70)
 
-    orbits, alphas = generate_same_orbit_mission(5, seed=7)
+    orbits, alphas = generate_mission_case(5, seed=7)
     T_ref = orbits[0].period_s
     tof_min, tof_max = 0.03 * T_ref, 1.3 * T_ref
 
