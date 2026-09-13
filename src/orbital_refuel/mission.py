@@ -14,7 +14,7 @@ from .keplerian import CircularOrbit, R_EARTH
 # Constant
 GEO_RADIUS_KM = R_EARTH + 35786.0
 
-def generate_same_orbit_mission(n_targets: int, seed: int = 42,
+def generate_mission_case(n_targets: int, seed: int = 42,
                                  r_km: float = GEO_RADIUS_KM,
                                  evenly: bool = False):
     """
