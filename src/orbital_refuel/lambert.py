@@ -166,11 +166,11 @@ def find_all_lambert_solutions(r1_vec: np.ndarray, r2_vec: np.ndarray, tof: floa
         - 'z': the value of the auxiliary variable z
     """
     if tof <= 0:
-        raise ValueError("El tiempo de vuelo (tof) debe ser positivo.")
+        raise ValueError("The time of flight (tof) must be positive.")
 
     r1, r2, A = _geometry(r1_vec, r2_vec, prograde)
     if not np.isfinite(A) or abs(A) < 1e-9:
-        raise ValueError("Geometría degenerada (Δν ≈ 0 o 180°).")
+        raise ValueError("Geometry degenerated (Δν ≈ 0 or 180°).")
 
     def F(z):
         C, S = _stumpff_C(z), _stumpff_S(z)
@@ -190,7 +190,7 @@ def find_all_lambert_solutions(r1_vec: np.ndarray, r2_vec: np.ndarray, tof: floa
             z = brentq(lambda zz: float(F(zz)), z_grid[k], z_grid[k + 1],
                        xtol=1e-10, maxiter=200)
         except ValueError:
-            continue  # cambio de signo espurio (artefacto de la grilla), se descarta
+            continue
         v1, v2, y = _velocities_at(z, r1_vec, r2_vec, r1, r2, A, mu)
         if y > 0 and np.all(np.isfinite(v1)):
             roots.append((z, v1, v2))
