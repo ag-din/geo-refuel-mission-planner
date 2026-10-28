@@ -46,24 +46,78 @@ Requires Python 3.10 or later. In a terminal, run the following commands:
 cd geo-refuel-mission-planner
 python -m venv .venv
 source .venv/bin/activate       # macOS/Linux
+pip install --upgrade pip
 pip install -e .
 ```
 
 ## Usage
 
-Main demonstration (optimal sequence, mass profile, TSA validation):
+Run experiment:
 
 ```bash
 python scripts/main.py
 ```
 
-### Interactive Mission Visualisation
+During the execution the following output can be seen:
+
+```text
+=== Mission case ===
+
+Optimal sequence: [1, 2, 3, 4, 5, 6]  (evenly spaced constellation, Isp=300.0s, m0=500.0 kg)
+Leg     Δv (km/s)   mass before (kg)  mass after (kg)     propellant (kg) 
+1       0.3426      500.00            445.04              54.96           
+2       0.3426      445.04            396.11              48.92           
+3       0.3426      396.11            352.57              43.54           
+4       0.3426      352.57            313.81              38.76           
+5       0.3426      313.81            279.32              34.50           
+6       0.3426      279.32            248.61              30.70           
+
+Note: Δv is the same across legs (symmetric geometry), but propellant decreases from 55.0 to 30.7 kg — exactly the pattern reportedin Tables 1 and 4 of the paper: propellant depends on the current MASS, not only on Δv.
+Final service mass: 248.61 kg (used 251.39 kg out of 500.0 kg initial)
+
+
+=== Regime analysis ===
+======================================================================
+VALIDATION 2: in which time regime is the TSA heuristic actually optimal?
+               (brute-force verification)
+======================================================================
+
+tf (periods)    tf/leg      TSA predicted Δv  true optimal Δv   match?    
+--------------------------------------------------------------------------
+1.0             0.20        22.213            21.900            NO        
+1.5             0.30        15.057            12.761            NO        
+2.0             0.40        11.429            8.123             NO        
+2.5             0.50        8.971             5.426             NO        
+3.0             0.60        6.328             3.707             NO        
+3.5             0.70        4.574             2.801             NO        
+4.0             0.80        3.226             2.417             NO        
+4.5             0.90        2.346             2.346             yes       
+5.0             1.00        1.744             1.744             yes       
+5.5             1.10        1.380             1.380             yes       
+6.0             1.20        1.338             1.338             yes       
+6.4             1.28        1.338             1.338             yes       
+
+TSA starts matching the true optimum at tf ≈ 4.5 periods (~0.90 periods/leg for n=5).
+The paper examples use tf=15.6 with n=4-6 (~2.6-3.9 periods/leg) — within the region where the heuristic does work.
+
+Figure saved to: outputs/figures/tsa_validity_regime.png
+
+=== Visualization ===
+Visualization generated at: /Users/agustina/Music/geo-refuel-mission-planner/outputs/reports/mission_visualization.html
+```
+
+Run the interactive mission visualisation:
 
 ```bash
 python visualization/animate_mission_html.py
 ```
 
-This script generates `visualization/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
+```text
+RDV Sequence: [1, 2, 3, 4, 5, 6]  Total Δv: 2.0651 km/s
+Visualization saved to: /Users/agustina/Music/geo-refuel-mission-planner/outputs/reports/mission_visualization.html
+```
+
+This script generates `outputs/reports/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
 
 - the satellites moving according to Kepler's laws;
 - the servicer travelling along the actual Lambert arcs from one target to the next, with targets coloured as pending, being visited or visited;
@@ -73,6 +127,7 @@ This script generates `visualization/mission_visualization.html`, a self-contain
 The file opens directly in a web browser (double-click, or `open`/`xdg-open`/`start`).
 
 Because all bodies in this model share the same orbit (zero inclination and RAAN for all of them), the view is purely planar; neither a second camera nor a 3D view is required.
+
 
 ## Project Structure
 
@@ -92,11 +147,12 @@ geo-refuel-mission-planner/
 ├── scripts/                          
 │   └── main.py                       # Main entry point
 ├── visualization/                   
-│   ├── animate_mission_html.py       # Interactive visualization
-│   └── mission_visualization.html    # Generated output
+│   |__ animate_mission_html.py       # Interactive visualization
 └── outputs/                          # Generated figures
     └── figures/
-        └── tsa_validity_regime.png
+    |    └── tsa_validity_regime.png
+    |__reports/
+          |__ mission_visualization.html    # Generated output
 ```
 
 ## References
