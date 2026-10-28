@@ -1,84 +1,46 @@
 # On-Orbit Refuelling Mission Planning for Multiple GEO Satellites Using a Single Servicing Spacecraft
 
-Proyecto de planificación de una nave de servicio que visita varios
-satélites objetivo en órbitas circulares. El objetivo es minimizar el
-`delta-v` total y estudiar cómo la secuencia, el tiempo disponible y la
-masa de la nave afectan la misión.
+This project addresses the mission planning problem of a single servicing spacecraft that visits several target satellites in  circular orbits. The objective is to minimise the total `delta-v` and to study how the visiting sequence, the available mission time and the servicer's mass affect the mission.
 
-## Modelo actual
+## Current Model
 
-El punto de entrada principal es `scripts/run_tsa_demo.py`. Implementa el modelo TSA
-(Total Sweep Angle) de Shen y Tsiotras (2002) — específicamente el
-**Problem 2** del paper (el servicio no regresa a su posición inicial;
-el **Problem 1**, con retorno al depot, no está implementado):
+The main entry point is `scripts/run_tsa_demo.py`. It implements the Total Sweep Angle (TSA) model of Shen and Tsiotras (2002), specifically **Problem 2** of that paper, in which the servicer does not return to its initial position. **Problem 1**, which includes a return to the depot, is not implemented.
 
-- El servicio parte del `DEPOT` y visita cada target una vez.
-- No hay retorno al depot.
-- Todos los cuerpos comparten la misma órbita circular: radio,
-  inclinación y RAAN.
-- Los satélites difieren únicamente en su fase orbital.
-- La misión tiene un tiempo total `tf` compartido entre todos los tramos.
-- Opcionalmente, se descuenta un **tiempo fijo de acoplamiento/entrega**
-  (`dock_time_s`, igual en cada parada — no está en el paper, es una
-  extensión propia) del `tf` total ANTES de repartir tiempo entre los
-  tramos de transferencia: `tf_transferencias = tf - n_paradas ×
-  dock_time_s`. No consume combustible (no es una maniobra), solo tiempo.
-- Cada tramo se evalúa mediante Lambert y el tiempo se distribuye con
-  un programa entero discretizado (`scipy.optimize.milp`).
-- La masa se calcula con la ecuación de Tsiolkovsky, con dos tanques
-  separados (propelente de maniobra y carga a entregar) y chequeo de
-  factibilidad — ver `orbital_refuel/mass_dynamics.py`.
+- The servicer departs from the `DEPOT` and visits each target exactly once.
+- There is no return to the depot.
+- All bodies share the same circular orbit, i.e. the same radius, inclination and right ascension of the ascending node (RAAN).
+- The satellites differ only in their orbital phase.
+- The mission has a total time `tf` that is shared among all legs.
+- Optionally, a **fixed docking/delivery time** (`dock_time_s`, identical at every stop) is subtracted from the total `tf` *before* time is allocated among the transfer legs: `tf_transfers = tf - n_stops × dock_time_s`. This extension is not part of the original paper. It consumes no propellant, since it is not a manoeuvre; it only consumes time.
+- Each leg is evaluated by solving Lambert's problem, and time is allocated through a discretised integer program (`scipy.optimize.milp`).
+- The mass budget is computed with the Tsiolkovsky rocket equation, using two separate tanks (manoeuvring propellant and cargo to be delivered) and a feasibility check; see `orbital_refuel/mass_dynamics.py`.
 
-## Supuestos de la simulación
+## Simulation Assumptions
 
-- Tierra esférica y parámetro gravitacional constante:
-  `mu = 398600.4418 km^3/s^2`.
-- Órbitas circulares (`e = 0`) y dinámica de dos cuerpos.
-- No se modelan perturbaciones, arrastre, maniobras de estación ni
-  ventanas de lanzamiento.
-- Lambert incluye soluciones multi-revolución (`lambert.find_all_lambert_solutions`,
-  validado a precisión de máquina contra `izzo2015` para M=0,1,2). La
-  curva de costo de cada tramo (`rdvsq_planning_model.cost_curve`) usa
-  esas soluciones más un mínimo acumulado sobre el tof, reproduciendo
-  el "coasting" del paper — la curva resultante sí tiene la estructura
-  real de rampa-meseta que describe la Fig. 1/2 de las referencias.
-- El coste de un tramo es el `delta-v` de la transferencia; el tiempo de
-  acoplamiento (si se usa `dock_time_s`) es una pausa fija sin costo de
-  combustible, no una operación modelada en detalle.
-- **La distribución de tiempo tiene dos modos**: `time_method="grid"`
-  (por defecto) discretiza la curva de costo en una malla de tiempos;
-  `time_method="exact"` usa los breakpoints β/A exactos (mínimos locales
-  de cada rama de Lambert vía optimización 1D) y las dos restricciones
-  de tiempo del paper (ecs. 16b/16c), sin error de discretización — más
-  lento, nunca peor. Ver Limitaciones para un caso de comparación.
-- En el perfil de masa se usa un `Isp` fijo y se aplica Tsiolkovsky
-  tramo a tramo.
-- El modelo TSA es específico para la constelación de una sola órbita;
-  no representa directamente una constelación con radios o planos
-  orbitales diferentes.
+- Spherical Earth with a constant gravitational parameter, `mu = 398600.4418 km^3/s^2`.
+- Circular orbits (`e = 0`) and two-body dynamics.
+- Perturbations, atmospheric drag, station-keeping manoeuvres and launch windows are not modelled.
+- The Lambert solver includes multi-revolution solutions (`lambert.find_all_lambert_solutions`), validated to machine precision against `izzo2015` for M = 0, 1, 2. The cost curve of each leg (`rdvsq_planning_model.cost_curve`) uses these solutions together with a cumulative minimum over the time of flight, reproducing the "coasting" behaviour described in the paper. The resulting curve exhibits the ramp–plateau structure shown in Figs. 1 and 2 of the references.
+- The cost of a leg is the `delta-v` of the transfer. The docking time (when `dock_time_s` is used) is a fixed pause with no propellant cost, not an operation modelled in detail.
+- **Time allocation offers two modes.** `time_method="grid"` (default) discretises the cost curve on a time grid. `time_method="exact"` uses the exact β/A breakpoints (local minima of each Lambert branch, obtained through 1D optimisation) and the two time constraints of the paper (Eqs. 16b and 16c), eliminating discretisation error. It is slower but never worse. See *Limitations and Future Work* for a comparison case.
+- The mass profile assumes a fixed specific impulse `Isp`, and the Tsiolkovsky equation is applied leg by leg.
+- The TSA model is specific to a single-orbit constellation; it does not directly represent constellations with different orbital radii or planes.
 
-## Resultados reproducibles
+## Results
 
-Al ejecutar `python scripts/run_tsa_demo.py` con los casos incluidos se obtiene:
+Running `python scripts/run_tsa_demo.py` with the included test cases yields:
 
-- Secuencia óptima para una constelación equiespaciada de 6 targets:
-  `[1, 2, 3, 4, 5, 6]`.
-- Perfil de masa con `m0 = 500 kg` e `Isp = 300 s`:
-  `500.00 kg -> 248.61 kg`.
-- Propelente consumido en la demostración: `251.39 kg`.
-- Con `n = 5`, la validación por fuerza bruta muestra que TSA no es
-  óptimo para presupuestos cortos y coincide con el óptimo probado desde
-  aproximadamente `4.5` periodos totales, es decir, `0.9` periodos por
-  tramo en ese experimento.
-- La figura de esa comparación se guarda en
-  `outputs/figures/tsa_validity_regime.png`.
+- Optimal sequence for an equally spaced constellation of 6 targets: `[1, 2, 3, 4, 5, 6]`.
+- Mass profile with `m0 = 500 kg` and `Isp = 300 s`: `500.00 kg -> 248.61 kg`.
+- Propellant consumed in the demonstration: `251.39 kg`.
+- For `n = 5`, brute-force validation shows that TSA is not optimal for short time budgets. It matches the proven optimum from approximately `4.5` total orbital periods onwards, i.e. `0.9` periods per leg in that experiment.
+- The figure for this comparison is saved to `outputs/figures/tsa_validity_regime.png`.
 
-Estos valores dependen de los parámetros, la semilla y la discretización
-utilizada por el programa entero.
+These values depend on the chosen parameters, the random seed and the discretisation used by the integer program.
 
-## Instalación
+## Installation
 
-Requiere Python 3.10 o posterior.
+Requires Python 3.10 or later.
 
 ```bash
 cd orbital_refuel_scheduler
@@ -87,72 +49,56 @@ source .venv/bin/activate       # macOS/Linux
 pip install -e .
 ```
 
-`poliastro` y `astropy` **no son necesarios** para `main.py` ni para el
-resto del proyecto — solo los usa `validation/compare_lambert.py` para
-comparar contra una implementación externa de Lambert. Viven en un
-archivo de dependencias separado; instalar solo si se quiere correr ese
-script en particular:
+## Usage
 
-```bash
-pip install -r requirements-validation.txt
-```
-
-## Ejecución
-
-Demostración principal (secuencia óptima, perfil de masa, validación TSA):
+Main demonstration (optimal sequence, mass profile, TSA validation):
 
 ```bash
 python scripts/run_tsa_demo.py
 ```
 
-Validaciones disponibles (cada una imprime sus propios resultados y
-asserts; no requieren `main.py` corrido antes):
-
-| Script | Qué valida |
-...
-
-
-### Visualización interactiva de la misión
+### Interactive Mission Visualisation
 
 ```bash
 python validation/animate_mission_html.py
 ```
 
-Genera `validation/mission_visualization.html`, un archivo autocontenido
-(sin dependencias externas ni servidor) que anima la secuencia óptima
-resuelta por `main.py`: los satélites moviéndose según Kepler, el
-servicio recorriendo los arcos de Lambert reales entre un objetivo y el
-siguiente (coloreados como pendiente/visitando/visitado), una pausa real
-de acoplamiento en cada parada (`DOCK_TIME_H`, un anillo alrededor del
-marcador indica cuándo está acoplado en vez de en tránsito), y dos
-medidores en vivo — propelente de maniobra y carga a entregar —
-calculados con `mass_dynamics.simulate_mission_mass`. Se abre
-directamente en el navegador (doble clic o `open`/`xdg-open`/`start`).
+This script generates `validation/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
 
-Como en este modelo todos los cuerpos comparten la misma órbita
-(inclinación y RAAN nulos para todos), la vista es puramente plana —
-no hace falta una segunda cámara ni una vista 3D.
+- the satellites moving according to Kepler's laws;
+- the servicer travelling along the actual Lambert arcs from one target to the next, with targets coloured as pending, being visited or visited;
+- a real docking pause at each stop (`DOCK_TIME_H`), during which a ring around the marker indicates that the servicer is docked rather than in transit;
+- two live gauges, one for manoeuvring propellant and one for cargo to be delivered, computed with `mass_dynamics.simulate_mission_mass`.
 
-## Estructura principal
+The file opens directly in a web browser (double-click, or `open`/`xdg-open`/`start`).
 
-- `src/orbital_refuel/keplerian.py`: propagación de órbitas circulares.
-- `src/orbital_refuel/lambert.py`: solver Lambert de cero revoluciones.
-- `src/orbital_refuel/transfer.py`: coste y optimización de un tramo.
-- `src/orbital_refuel/mission.py`: generación de la constelación de una sola órbita.
-- `src/orbital_refuel/rdvsq_planning_model.py`: TSA, distribución de tiempo
-  y perfil de masa.
-- `src/orbital_refuel/mass_dynamics.py`: dinámica explícita de propelente y
-  carga con chequeo de factibilidad (dos tanques, sin simplificar).
-- `scripts/`: ejecuciones principales y demos manuales.
-- `validation/`: scripts de validación independientes y visualizaciones
-  (ver tabla arriba).
-- `tests/`: pruebas automáticas rápidas.
-- `outputs/`: figuras, videos y reportes generados.
+Because all bodies in this model share the same orbit (zero inclination and RAAN for all of them), the view is purely planar; neither a second camera nor a 3D view is required.
 
-## Limitaciones y trabajo futuro
+## Project Structure
 
-## Details 
-
+```text
+orbital_refuel_scheduler/
+├── README.md
+├── src/
+│   └── orbital_refuel/
+│       ├── keplerian.py              # Propagation of circular orbits
+│       ├── lambert.py                # Lambert solver (zero-revolution)
+│       ├── transfer.py               # Cost and optimisation of a single leg
+│       ├── mission.py                # Generation of the single-orbit constellation
+│       ├── rdvsq_planning_model.py   # TSA, time allocation and mass profile
+│       └── mass_dynamics.py          # Explicit propellant and cargo dynamics with
+│                                     #   feasibility check (two tanks, unsimplified)
+├── scripts/                          # Main runs and manual demos
+│   └── run_tsa_demo.py               # Main entry point
+├── validation/                       # Independent validation scripts and visualisations
+│   ├── animate_mission_html.py
+│   └── mission_visualization.html    # Generated output
+├── tests/                            # Fast automated tests
+└── outputs/                          # Generated figures, videos and reports
+    └── figures/
+        └── tsa_validity_regime.png
+```
 
 ## References
 
+Tsiotras, P., & de Nailly, A. (2005). Comparison between peer-to-peer and single-spacecraft refueling strategies for spacecraft in circular orbits. In *Infotech@Aerospace* (AIAA Paper 2005-7115). American Institute of Aeronautics and Astronautics. https://doi.org/10.2514/6.2005-7115
