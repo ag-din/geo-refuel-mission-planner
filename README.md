@@ -106,6 +106,10 @@ Figure saved to: outputs/figures/tsa_validity_regime.png
 Visualization generated at: outputs/reports/mission_visualization.html
 ```
 
+![Figure](img/tsa_validity_regime.png)
+
+
+
 Run the interactive mission visualisation:
 
 ```bash
@@ -128,6 +132,7 @@ The file opens directly in a web browser (double-click, or `open`/`xdg-open`/`st
 
 Because all bodies in this model share the same orbit (zero inclination and RAAN for all of them), the view is purely planar; neither a second camera nor a 3D view is required.
 
+![Representative image](img/int_visualization.png)
 
 ## Project Structure
 
