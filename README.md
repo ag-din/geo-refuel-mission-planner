@@ -103,7 +103,7 @@ The paper examples use tf=15.6 with n=4-6 (~2.6-3.9 periods/leg) — within the 
 Figure saved to: outputs/figures/tsa_validity_regime.png
 
 === Visualization ===
-Visualization generated at: /Users/agustina/Music/geo-refuel-mission-planner/outputs/reports/mission_visualization.html
+Visualization generated at: outputs/reports/mission_visualization.html
 ```
 
 Run the interactive mission visualisation:
@@ -114,7 +114,7 @@ python visualization/animate_mission_html.py
 
 ```text
 RDV Sequence: [1, 2, 3, 4, 5, 6]  Total Δv: 2.0651 km/s
-Visualization saved to: /Users/agustina/Music/geo-refuel-mission-planner/outputs/reports/mission_visualization.html
+Visualization saved to: outputs/reports/mission_visualization.html
 ```
 
 This script generates `outputs/reports/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
