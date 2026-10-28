@@ -78,23 +78,23 @@ Because all bodies in this model share the same orbit (zero inclination and RAAN
 
 ```text
 geo-refuel-mission-planner/
-├── README.md
-|__ requirements.txt                  
+├── README.md                         # Documentation
+|__ requirements.txt                  # Requirements     
 ├── src/
 │   └── orbital_refuel/
 │       ├── keplerian.py              # Propagation of circular orbits
-│       ├── lambert.py                # Lambert solver (zero-revolution)
-│       ├── transfer.py               # Cost and optimisation of a single leg
-│       ├── mission.py                # Generation of the single-orbit constellation
+│       ├── lambert.py                # Lambert solver
+│       ├── transfer.py               # Cost and optimisation
+│       ├── mission.py                # Generation of the single-orbit constellation scenario
 │       ├── rdvsq_planning_model.py   # TSA, time allocation and mass profile
-│       └── mass_dynamics.py          # Explicit propellant and cargo dynamics with
-│                                     #   feasibility check (two tanks, unsimplified)
-├── scripts/                          # Main runs and manual demos
+│       └── mass_dynamics.py          # Explicit propellant and cargo dynamics
+│   
+├── scripts/                          
 │   └── main.py                       # Main entry point
-├── visualization/                    # Visualizations
-│   ├── animate_mission_html.py
+├── visualization/                   
+│   ├── animate_mission_html.py       # Interactive visualization
 │   └── mission_visualization.html    # Generated output
-└── outputs/                          # Generated figures, videos and reports
+└── outputs/                          # Generated figures
     └── figures/
         └── tsa_validity_regime.png
 ```
