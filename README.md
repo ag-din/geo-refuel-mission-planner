@@ -2,9 +2,9 @@
 
 This project addresses the mission planning problem of a single servicing spacecraft that visits several target satellites in  circular orbits. The objective is to minimise the total `delta-v` and to study how the visiting sequence, the available mission time and the servicer's mass affect the mission.
 
-## Current Model
+## Model
 
-The main entry point is `scripts/main.py`. It implements the Total Sweep Angle (TSA) model of Shen and Tsiotras (2002), specifically **Problem 2** of that paper, in which the servicer does not return to its initial position. **Problem 1**, which includes a return to the depot, is not implemented.
+The main entry point is `scripts/main.py`. It implements the Total Sweep Angle (TSA) model of Shen and Tsiotras (2005), specifically **Problem 2** of that paper, in which the servicer does not return to its initial position. **Problem 1**, which includes a return to the depot, is not implemented.
 
 - The servicer departs from the `DEPOT` and visits each target exactly once.
 - There is no return to the depot.
@@ -17,12 +17,12 @@ The main entry point is `scripts/main.py`. It implements the Total Sweep Angle (
 
 ## Simulation Assumptions
 
-- Spherical Earth with a constant gravitational parameter, `mu = 398600.4418 km^3/s^2`.
+- Spherical Earth.
 - Circular orbits (`e = 0`) and two-body dynamics.
 - Perturbations, atmospheric drag, station-keeping manoeuvres and launch windows are not modelled.
-- The Lambert solver includes multi-revolution solutions (`lambert.find_all_lambert_solutions`), validated to machine precision against `izzo2015` for M = 0, 1, 2. The cost curve of each leg (`rdvsq_planning_model.cost_curve`) uses these solutions together with a cumulative minimum over the time of flight, reproducing the "coasting" behaviour described in the paper. The resulting curve exhibits the ramp–plateau structure shown in Figs. 1 and 2 of the references.
-- The cost of a leg is the `delta-v` of the transfer. The docking time (when `dock_time_s` is used) is a fixed pause with no propellant cost, not an operation modelled in detail.
-- **Time allocation offers two modes.** `time_method="grid"` (default) discretises the cost curve on a time grid. `time_method="exact"` uses the exact β/A breakpoints (local minima of each Lambert branch, obtained through 1D optimisation) and the two time constraints of the paper (Eqs. 16b and 16c), eliminating discretisation error. It is slower but never worse. See *Limitations and Future Work* for a comparison case.
+- The Lambert solver includes multi-revolution solutions (`lambert.find_all_lambert_solutions`), validated to machine precision against `izzo2015` for M = 0, 1, 2. The cost curve of each leg (`rdvsq_planning_model.cost_curve`) uses these solutions together with a cumulative minimum over the time of flight, reproducing the "coasting" behaviour described in the paper. The resulting curve exhibits the ramp–plateau structure shown in Figs. 1 and 2 of the reference.
+- The cost of a leg is the `delta-v` of the transfer. The docking time (when `dock_time_s` is used) is a fixed pause with no propellant cost.
+- **Time allocation offers two modes.** `time_method="grid"` (default) discretises the cost curve on a time grid. `time_method="exact"` uses the exact β/A breakpoints (local minima of each Lambert branch, obtained through 1D optimisation) and the two time constraints of the paper (Eqs. 16b and 16c), eliminating discretisation error. It is slower but never worse.
 - The mass profile assumes a fixed specific impulse `Isp`, and the Tsiolkovsky equation is applied leg by leg.
 - The TSA model is specific to a single-orbit constellation; it does not directly represent constellations with different orbital radii or planes.
 
