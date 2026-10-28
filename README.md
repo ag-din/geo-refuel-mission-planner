@@ -4,7 +4,7 @@ This project addresses the mission planning problem of a single servicing spacec
 
 ## Current Model
 
-The main entry point is `scripts/run_tsa_demo.py`. It implements the Total Sweep Angle (TSA) model of Shen and Tsiotras (2002), specifically **Problem 2** of that paper, in which the servicer does not return to its initial position. **Problem 1**, which includes a return to the depot, is not implemented.
+The main entry point is `scripts/main.py`. It implements the Total Sweep Angle (TSA) model of Shen and Tsiotras (2002), specifically **Problem 2** of that paper, in which the servicer does not return to its initial position. **Problem 1**, which includes a return to the depot, is not implemented.
 
 - The servicer departs from the `DEPOT` and visits each target exactly once.
 - There is no return to the depot.
@@ -28,7 +28,7 @@ The main entry point is `scripts/run_tsa_demo.py`. It implements the Total Sweep
 
 ## Results
 
-Running `python scripts/run_tsa_demo.py` with the included test cases yields:
+Running `python scripts/main.py` with the included test cases yields:
 
 - Optimal sequence for an equally spaced constellation of 6 targets: `[1, 2, 3, 4, 5, 6]`.
 - Mass profile with `m0 = 500 kg` and `Isp = 300 s`: `500.00 kg -> 248.61 kg`.
@@ -40,10 +40,10 @@ These values depend on the chosen parameters, the random seed and the discretisa
 
 ## Installation
 
-Requires Python 3.10 or later.
+Requires Python 3.10 or later. In a terminal, run the following commands:
 
 ```bash
-cd orbital_refuel_scheduler
+cd geo-refuel-mission-planner
 python -m venv .venv
 source .venv/bin/activate       # macOS/Linux
 pip install -e .
@@ -54,16 +54,16 @@ pip install -e .
 Main demonstration (optimal sequence, mass profile, TSA validation):
 
 ```bash
-python scripts/run_tsa_demo.py
+python scripts/main.py
 ```
 
 ### Interactive Mission Visualisation
 
 ```bash
-python validation/animate_mission_html.py
+python visualization/animate_mission_html.py
 ```
 
-This script generates `validation/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
+This script generates `visualization/mission_visualization.html`, a self-contained file (no external dependencies or server required) that animates the optimal sequence produced by `main.py`. The animation shows:
 
 - the satellites moving according to Kepler's laws;
 - the servicer travelling along the actual Lambert arcs from one target to the next, with targets coloured as pending, being visited or visited;
@@ -77,8 +77,9 @@ Because all bodies in this model share the same orbit (zero inclination and RAAN
 ## Project Structure
 
 ```text
-orbital_refuel_scheduler/
+geo-refuel-mission-planner/
 ├── README.md
+|__ requirements.txt                  
 ├── src/
 │   └── orbital_refuel/
 │       ├── keplerian.py              # Propagation of circular orbits
@@ -89,11 +90,10 @@ orbital_refuel_scheduler/
 │       └── mass_dynamics.py          # Explicit propellant and cargo dynamics with
 │                                     #   feasibility check (two tanks, unsimplified)
 ├── scripts/                          # Main runs and manual demos
-│   └── run_tsa_demo.py               # Main entry point
-├── validation/                       # Independent validation scripts and visualisations
+│   └── main.py                       # Main entry point
+├── visualization/                    # Visualizations
 │   ├── animate_mission_html.py
 │   └── mission_visualization.html    # Generated output
-├── tests/                            # Fast automated tests
 └── outputs/                          # Generated figures, videos and reports
     └── figures/
         └── tsa_validity_regime.png
